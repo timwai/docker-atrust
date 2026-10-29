@@ -18,6 +18,7 @@
 
 - 两个构建阶段统一使用 `ubuntu:24.04`，所有系统包使用 Ubuntu 官方 APT 仓库（包括 universe），不再配置 Debian 11 历史快照。
 - 删除系统 `libssl1.1`、`libldap-2.4-2`、重复的 Qt5 运行包，以及不用于运行的 `libssl-dev`，优先使用厂商 DEB 自带的库。
+- 同时安装 `iptables` 与 `nftables`（提供 `nft` 命令），但不自动启用 nftables 服务、也不改变现有 iptables 规则或容器网络模式。`NET_ADMIN` 与宿主机内核的 Netfilter 支持仍是实际操作规则的前提。
 - 明确提供 Qt XCB 插件、GTK、X11 需要的底层系统动态库；系统依赖清单基于 129 个 ELF 的 `DT_NEEDED` 分析，但未覆盖 `dlopen`。
 - 默认不内置浏览器（`BUILD_CHROMIUM=0`）；若设为 `1`，安装官方 Google Chrome DEB，而非 Ubuntu 的 Snap 过渡包。
 - 注意：厂商自带的 `libldap_r-2.4.so.2` 仍引用旧版 `libgnutls.so.26`、`libgcrypt.so.11`，两者在 Ubuntu 24.04 中并非原生系统库。静态扫描未发现主进程直接依赖该 LDAP 库，但这**不代表该功能无风险**；遇到登录问题请先检查动态库实际加载记录。

@@ -15,6 +15,9 @@ docker run --rm --pull=never --network=none --entrypoint=/bin/bash "$IMAGE" -ec 
     command -v socat
     command -v ip
     command -v iptables
+    command -v nft
+    nft --version
+    dpkg-query -W -f='\${Status}\n' nftables | grep -q 'install ok installed'
     command -v dpkg-deb
     command -v flwm
     command -v stalonetray

@@ -22,7 +22,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ca-certificates bash dpkg passwd \
       curl wget busybox psmisc procps \
-      iptables iproute2 socat \
+      iptables nftables iproute2 socat \
       tigervnc-standalone-server tigervnc-tools \
       flwm stalonetray xclip x11-utils xauth \
       fonts-wqy-microhei novnc websockify dbus-x11 \
