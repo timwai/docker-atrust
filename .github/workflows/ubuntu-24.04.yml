@@ -18,27 +18,14 @@ jobs:
         run: |
           bash -n build.sh
           bash -n runtime/scripts/start.sh runtime/scripts/install-atrust.sh build-scripts/install-vpn-gui.sh
-          bash -n tests/ubuntu-24.04-smoke.sh
-      - name: Validate default Compose image
+          bash -n tests/ubuntu-24.04-smoke.sh set-vnc-password.sh check.sh
+      - name: Validate default Compose image and runtime secret path
         run: |
-          VNC_PASSWORD=ci docker compose config --format json |
-            python3 -c 'import json,sys; cfg=json.load(sys.stdin); assert cfg["services"]["atrust"]["image"] == "tingjusting/atrust:latest"'
-      - name: Verify runtime VNC secret configuration
-        run: |
-          bash -n set-vnc-password.sh
-          test "$(grep -c '^/runtime/vnc-password
-        run: docker build --progress=plain --build-arg CHROMIUM=0 -t tingjusting/atrust:latest .
-      - name: Verify runtime and show image size
-        run: bash tests/ubuntu-24.04-smoke.sh
- .gitignore)" -eq 1
-          grep -q '^      VNC_PASSWORD_FILE: /opt/atrust/vnc-password
-        run: docker build --progress=plain --build-arg CHROMIUM=0 -t tingjusting/atrust:latest .
-      - name: Verify runtime and show image size
-        run: bash tests/ubuntu-24.04-smoke.sh
- compose.yaml
-          ! grep -Eq '^      (PASSWORD|VNC_PASSWORD):' compose.yaml
-          VNC_PASSWORD=ci docker compose config --format json |
-            python3 -c 'import json,sys; e=json.load(sys.stdin)["services"]["atrust"]["environment"]; assert e["VNC_PASSWORD_FILE"] == "/opt/atrust/vnc-password"; assert "PASSWORD" not in e and "VNC_PASSWORD" not in e'
+          grep -Fxq '/runtime/vnc-password' .gitignore
+          grep -Fq 'VNC_PASSWORD_FILE: /opt/atrust/vnc-password' compose.yaml
+          ! grep -Eq '^[[:space:]]+(PASSWORD|VNC_PASSWORD):' compose.yaml
+          docker compose config --format json |
+            python3 -c 'import json,sys; cfg=json.load(sys.stdin); assert cfg["services"]["atrust"]["image"] == "tingjusting/atrust:latest"; e=cfg["services"]["atrust"]["environment"]; assert e["VNC_PASSWORD_FILE"] == "/opt/atrust/vnc-password"; assert "PASSWORD" not in e and "VNC_PASSWORD" not in e'
       - name: Build minimal Ubuntu 24.04 runtime (no DEB)
         run: docker build --progress=plain --build-arg CHROMIUM=0 -t tingjusting/atrust:latest .
       - name: Verify runtime and show image size
