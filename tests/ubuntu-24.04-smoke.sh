@@ -17,13 +17,13 @@ docker run --rm --pull=never --network=none --entrypoint=/bin/bash "$IMAGE" -ec 
     command -v iptables
     command -v nft
     nft --version
-    dpkg-query -W -f='\${Status}\n' nftables | grep -q 'install ok installed'
+    dpkg -s nftables | grep -q "Status: install ok installed"
     command -v dpkg-deb
     command -v flwm
     command -v stalonetray
-    ! dpkg-query -W -f="${Status}" libssl1.1 2>/dev/null | grep -q "install ok installed"
-    ! dpkg-query -W -f="${Status}" libldap-2.4-2 2>/dev/null | grep -q "install ok installed"
-    ! dpkg-query -W -f="${Status}" libqt5core5t64 2>/dev/null | grep -q "install ok installed"
+    ! dpkg -s libssl1.1 2>/dev/null | grep -q "Status: install ok installed"
+    ! dpkg -s libldap-2.4-2 2>/dev/null | grep -q "Status: install ok installed"
+    ! dpkg -s libqt5core5t64 2>/dev/null | grep -q "Status: install ok installed"
     echo "Ubuntu 24.04 runtime smoke checks passed (without installing aTrust)"
 '
 docker image inspect "$IMAGE" --format 'Image bytes={{.Size}}'
