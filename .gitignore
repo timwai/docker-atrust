@@ -1,0 +1,10 @@
+# Vendor proprietary software must never be committed.
+vendor/*.deb
+vendor/*.rpm
+vendor/*.zip
+.env
+data/
+*.tar
+*.tar.gz
+*.log
+*.swp

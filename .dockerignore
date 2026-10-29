@@ -1,0 +1,10 @@
+.git
+.github
+.env
+data
+*.tar
+*.tar.gz
+README.md
+*.log
+vendor/*
+!vendor/aTrustInstaller_amd64.deb
