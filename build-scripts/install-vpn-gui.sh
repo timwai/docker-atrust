@@ -1,65 +1,37 @@
-#!/bin/bash
-if [ "ATRUST" = "$VPN_TYPE" ]; then
-	mv /usr/sbin/sysctl{,.real} &&
-	ln -s /usr/sbin/sysctl{-hook,}
-fi &&
-echo "$VPN_TYPE" > /etc/vpn-type &&
-cd /tmp &&
-. ./build-scripts/get-echost-names.sh &&
-if [ -s /tmp/VPN.deb ]; then
-    echo "Using locally provided aTrust package"
-else
-    echo "Missing /tmp/VPN.deb: run ./build.sh --deb PATH" >&2
+#!/usr/bin/env bash
+# Adapted from docker-easyconnect's aTrust-only DEB installer.
+# Executed by scripts/install-atrust.sh at CONTAINER START, not at image build.
+set -Eeuo pipefail
+[[ "${VPN_TYPE:-}" == ATRUST ]] || { echo "Only VPN_TYPE=ATRUST is supported" >&2; exit 1; }
+[[ -s /tmp/VPN.deb ]] || { echo "Missing staged aTrust /tmp/VPN.deb" >&2; exit 1; }
+if [[ ! -e /usr/sbin/sysctl.real ]]; then
+    mv /usr/sbin/sysctl /usr/sbin/sysctl.real
+    ln -s /usr/sbin/sysctl-hook /usr/sbin/sysctl
+fi
+printf '%s\n' ATRUST > /etc/vpn-type
+cd /tmp
+dpkg-deb -R VPN.deb /
+pkg="$(sed -n 's/^Package:[[:space:]]*//p' /DEBIAN/control | head -n 1)"
+[[ -n "$pkg" ]] || { echo "Invalid aTrust control: no Package" >&2; exit 1; }
+if [[ -f /DEBIAN/preinst ]]; then
+    /DEBIAN/preinst || true
+fi
+mkdir -p /var/lib/dpkg/info
+for file in /DEBIAN/*; do
+    [[ -f "$file" ]] || continue
+    cp "$file" "/var/lib/dpkg/info/$pkg.$(basename "$file")"
+    # aTrust's proprietary postinst expects unprefixed maintenance scripts.
+    cp "$file" "/var/lib/dpkg/info/$(basename "$file")"
+done
+[[ -f "/var/lib/dpkg/info/$pkg.postinst" ]] || {
+    echo "Package has no postinst; validate installer format" >&2
     exit 1
-fi &&
-dpkg-deb -R VPN.deb / &&
-package_name=$(echo $(grep -Po '(?<=Package:).*' /DEBIAN/control)) &&
-{ /DEBIAN/preinst || true ; } &&
-mkdir /var/lib/dpkg/info/$package_name &&
+}
+"/var/lib/dpkg/info/$pkg.postinst"
 for file in /DEBIAN/*; do
-	cp "$file" /var/lib/dpkg/info/"$package_name.$(basename $file)" &&
-	# workaround for aTrust scripts
-	cp "$file" /var/lib/dpkg/info/"$(basename $file)"
-done &&
-/var/lib/dpkg/info/$package_name.postinst &&
-for file in /DEBIAN/*; do
-	rm /var/lib/dpkg/info/"$(basename $file)"
-done &&
-rm -r /DEBIAN VPN.deb &&
-if [ -e /home/sangfor/ ]; then
-	chown sangfor:sangfor -R /home/sangfor/
-fi &&
-
-ln -fs /bin/false /usr/sbin/dmidecode &&
-
-if [ "EC_CLI" != "$VPN_TYPE" -a "EC_GUI" != "$VPN_TYPE" ]; then
-	exit 0
-fi &&
-
-extra_bins=EasyMonitor ./build-scripts/mk-qemu-wrapper.sh &&
-
-rm -f /usr/share/sangfor/EasyConnect/resources/conf/easy_connect.json &&
-mv /usr/share/sangfor/EasyConnect/resources/conf/ /usr/share/sangfor/EasyConnect/resources/conf_backup &&
-
-if ! is_echost_foreign &&  [ ! -z "${USE_VPN_ELECTRON}" ] ; then
-	exit 0
-fi &&
-
-declare -A ELECTRON_URLS &&
-
-# v1.8 以下的 electron 无官方 arm64、mips64el 构建
-# armhf 在 v1.8.2-beta4 到 v1.8.8 无法渲染：https://github.com/electron/electron/issues/11797
-ELECTRON_URLS=(
-	[amd64]=https://github.com/electron/electron/releases/download/v1.8.8/electron-v1.8.8-linux-x64.zip
-	[i386]=https://github.com/electron/electron/releases/download/v1.8.8/electron-v1.8.8-linux-ia32.zip
-	[armhf]=https://github.com/electron/electron/releases/download/v1.7.16/electron-v1.7.16-linux-armv7l.zip
-	[arm64]=https://github.com/electron/electron/releases/download/v1.8.8/electron-v1.8.8-linux-arm64.zip
-	[mips64el]=https://github.com/electron/electron/releases/download/v1.8.8/electron-v1.8.8-linux-mips64el.zip
-) &&
-if [ -z "${ELECTRON_URL}" ]; then
-	ELECTRON_URL="${ELECTRON_URLS[$(dpkg --print-architecture)]}"
-fi &&
-wget "${ELECTRON_URL}" -O electron.zip &&
-busybox unzip electron.zip -od /usr/share/sangfor/EasyConnect/ &&
-rm electron.zip &&
-mv /usr/share/sangfor/EasyConnect/{electron,EasyConnect}
+    [[ -f "$file" ]] || continue
+    rm -f "/var/lib/dpkg/info/$(basename "$file")"
+done
+rm -rf /DEBIAN
+rm -f /tmp/VPN.deb
+[[ ! -d /home/sangfor ]] || chown -R sangfor:sangfor /home/sangfor

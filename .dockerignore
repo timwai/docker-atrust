@@ -2,9 +2,7 @@
 .github
 .env
 data
+vendor
 *.tar
 *.tar.gz
-README.md
 *.log
-vendor/*
-!vendor/aTrustInstaller_amd64.deb

@@ -1,7 +1,12 @@
 services:
   atrust:
     image: ${ATRUST_IMAGE:-local/atrust:latest}
+    build:
+      context: .
+      args:
+        CHROMIUM: ${BUILD_CHROMIUM:-0}
     container_name: atrust
+    init: true
     restart: unless-stopped
     devices:
       - /dev/net/tun:/dev/net/tun
@@ -12,13 +17,15 @@ services:
     environment:
       PASSWORD: ${VNC_PASSWORD:?Set VNC_PASSWORD in the private .env file}
       URLWIN: '1'
-      CHROMIUM: ${CHROMIUM:-}
+      CHROMIUM: ${CHROMIUM:-0}
       USE_NOVNC: ${USE_NOVNC:-}
+      VNC_SIZE: ${VNC_SIZE:-1110x620}
+    entrypoint: ["/bin/bash", "/opt/atrust/scripts/start.sh"]
     volumes:
       - ./data:/root
+      - ./scripts:/opt/atrust/scripts:ro
+      - ./vendor/aTrustInstaller_amd64.deb:/opt/atrust/aTrustInstaller_amd64.deb:ro
     ports:
-      - '127.0.0.1:5901:5901'
-      - '127.0.0.1:1080:1080'
-      - '127.0.0.1:8888:8888'
-      - '127.0.0.1:54631:54631'
-      - '127.0.0.1:8080:8080' # optional noVNC
+      - '127.0.0.1:5901:5901'  # VNC
+      - '127.0.0.1:54631:54631'  # aTrust browser auth callback
+      - '127.0.0.1:8080:8080'  # optional noVNC
