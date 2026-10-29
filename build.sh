@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "$0")" && pwd)"
 cd "$ROOT"
-IMAGE_REPO="${IMAGE_REPO:-local/atrust}"
+IMAGE_REPO="${IMAGE_REPO:-tingjusting/atrust}"
 ATRUST_VERSION="${ATRUST_VERSION:-2.5.16.30}"
 CHROMIUM=0
 DEB_SOURCE=""

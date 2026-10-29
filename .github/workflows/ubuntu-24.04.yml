@@ -1,7 +1,7 @@
 name: Ubuntu 24.04 runtime image (no proprietary DEB)
 on:
   push:
-    branches: [ubuntu-24.04]
+    branches: [main, ubuntu-24.04]
   workflow_dispatch:
 
 permissions:
@@ -19,7 +19,11 @@ jobs:
           bash -n build.sh
           bash -n runtime/scripts/start.sh runtime/scripts/install-atrust.sh build-scripts/install-vpn-gui.sh
           bash -n tests/ubuntu-24.04-smoke.sh
+      - name: Validate default Compose image
+        run: |
+          VNC_PASSWORD=ci docker compose config --format json |
+            python3 -c 'import json,sys; cfg=json.load(sys.stdin); assert cfg["services"]["atrust"]["image"] == "tingjusting/atrust:latest"'
       - name: Build minimal Ubuntu 24.04 runtime (no DEB)
-        run: docker build --progress=plain --build-arg CHROMIUM=0 -t local/atrust:ubuntu-24.04 .
+        run: docker build --progress=plain --build-arg CHROMIUM=0 -t tingjusting/atrust:latest .
       - name: Verify runtime and show image size
-        run: bash tests/ubuntu-24.04-smoke.sh local/atrust:ubuntu-24.04
+        run: bash tests/ubuntu-24.04-smoke.sh

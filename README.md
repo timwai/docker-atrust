@@ -2,6 +2,8 @@
 
 无需宿主机图形桌面，在 Ubuntu Server（amd64）上通过 Docker 使用深信服 aTrust Linux 客户端。
 
+**默认 Docker 镜像名称为 `tingjusting/atrust:latest`**（只改变本地镜像标签，不会自动推送 Docker Hub）。如果旧的 `.env` 仍有 `ATRUST_IMAGE=local/atrust:latest`，需要手动改成新名称；`./build.sh` 默认也构建 `tingjusting/atrust:latest`。
+
 **当前设计：所有需要持久化或外挂的内容，只映射一个宿主机目录 `./runtime:/opt/atrust`。** 不内置 aTrust 官方 DEB；新容器启动时从该目录安装。没有 SOCKS5/HTTP 正向代理，保留 VNC、可选 noVNC 和厂商网页登录回调。网络模式仍为 Docker Compose 默认 bridge，不共享宿主机网络。
 
 > 本工程为非官方社区衍生项目，与深信服及相关运营商无隶属关系。使用企业 VPN 前请确认授权；不提供规避厂商认证、MFA 或终端安全控制的功能。请不要公开企业专属 DEB、配置、证书及登录数据。
@@ -10,9 +12,9 @@
 
 本项目基于 [docker-easyconnect/docker-easyconnect](https://github.com/docker-easyconnect/docker-easyconnect) 改造，最初导入的上游源码版本是 [`e8fc56a7c518d83b6817e16713f765e3c652e3bf`](https://github.com/docker-easyconnect/docker-easyconnect/commit/e8fc56a7c518d83b6817e16713f765e3c652e3bf)。致谢原作者 Hagb 及 docker-easyconnect 贡献者，保留 [LICENSE.txt](LICENSE.txt)（WTFPL v2）。本仓库的开源许可**不覆盖**深信服 aTrust 专有客户端、商标或其下载包；Debian、TigerVNC、noVNC 等仍适用各自许可证。
 
-本项目将用到的上游辅助脚本和 C 源文件直接收录在当前仓库，镜像构建阶段不克隆其他 GitHub 仓库。Ubuntu 24.04 测试分支的构建仍需要 Ubuntu 基础镜像与 Ubuntu APT 仓库；明确使用 `--official` 时还需深信服官方 CDN。
+本项目将用到的上游辅助脚本和 C 源文件直接收录在当前仓库，镜像构建阶段不克隆其他 GitHub 仓库。Ubuntu 24.04 主分支的构建仍需要 Ubuntu 基础镜像与 Ubuntu APT 仓库；明确使用 `--official` 时还需深信服官方 CDN。
 
-## Ubuntu 24.04 精简运行镜像（测试分支）
+## Ubuntu 24.04 精简运行镜像（main）
 
 此分支针对企业门户提供的 **aTrust 2.5.16.30 Ubuntu AMD64 DEB** 做适配；保留 Docker Bridge、`./runtime:/opt/atrust` 唯一目录映射、VNC 和容器首次启动安装客户端的架构，不提供 HTTP/SOCKS 正向代理。
 
@@ -23,20 +25,20 @@
 - 默认不内置浏览器（`BUILD_CHROMIUM=0`）；若设为 `1`，安装官方 Google Chrome DEB，而非 Ubuntu 的 Snap 过渡包。
 - 注意：厂商自带的 `libldap_r-2.4.so.2` 仍引用旧版 `libgnutls.so.26`、`libgcrypt.so.11`，两者在 Ubuntu 24.04 中并非原生系统库。静态扫描未发现主进程直接依赖该 LDAP 库，但这**不代表该功能无风险**；遇到登录问题请先检查动态库实际加载记录。
 
-### 从 main 切换到测试分支
+### 从 main 部署 Ubuntu 24.04
 
 **先备份** `runtime/data/root`、`.env` 和自定义脚本，切换 Git 分支前确认工作区没有未提交的改动。请不要将 DEB 或企业配置提交到 Git。
 
 ```bash
 cd ~/docker/docker-atrust
-git fetch origin ubuntu-24.04
-git switch --track origin/ubuntu-24.04  # 首次切换
-# 已有本地 ubuntu-24.04 分支则使用 git switch ubuntu-24.04
+git fetch origin
+git switch main
+git pull --ff-only origin main
 docker compose config -q
 
 # 不安装可选浏览器的最小镜像
 docker compose build --no-cache
-bash tests/ubuntu-24.04-smoke.sh local/atrust:latest
+bash tests/ubuntu-24.04-smoke.sh tingjusting/atrust:latest
 
 # 确保 runtime/aTrustInstaller_amd64.deb 已存在
 docker compose up -d --force-recreate
@@ -57,18 +59,17 @@ docker compose up -d --build --force-recreate
 ./check.sh
 docker exec atrust cat /etc/os-release
 docker exec atrust ldd /usr/share/sangfor/aTrust/resources/bin/aTrustAgent | grep -E 'not found|ssl|crypto|Qt5' || true
-docker image inspect local/atrust:latest --format '{{.Size}}'
+docker image inspect tingjusting/atrust:latest --format '{{.Size}}'
 docker ps -s
 ```
 
 `ldd` 适用于你从授权门户取得且可信的客户端文件；对不可信 ELF 不要运行它。**单纯构建和静态检查不代表 VPN 实际可登录。**
 
-测试失败可切换回 `main` 并重新构建：
+如果测试失败需要回退到历史 Debian 镜像代码，请先备份 `runtime/data/root` 和 `.env`，再选择先前的已知提交并重建；**当前 main 已经是 Ubuntu 24.04，不再是 Debian 版本**：
 
 ```bash
 docker compose down
-git switch main
-git pull --ff-only origin main
+git switch -c debian-rollback a98d8bfc1a060b16012674af35b618b062de9fe9
 docker compose up -d --build --force-recreate
 ```
 
@@ -204,7 +205,7 @@ ssh -L 5901:127.0.0.1:5901 -L 54631:127.0.0.1:54631 \
     -L 8080:127.0.0.1:8080 user@ubuntu-server
 ```
 
-VNC Viewer 连接 `127.0.0.1:5901`，或开启 noVNC 后访问 `http://127.0.0.1:8080/vnc.html`。Ubuntu 24.04 的 `chromium-browser` 是 Snap 过渡包，无法像 Debian 的 Chromium 一样直接用于轻量容器；因此测试分支在 `BUILD_CHROMIUM=1` 时通过 HTTPS 安装 **Google Chrome 官方 AMD64 DEB**（有额外的服务条款并显著增大镜像）。启用浏览器还需设置 `CHROMIUM=1` 再重建镜像。VNC 传统密码最多使用前 8 位。
+VNC Viewer 连接 `127.0.0.1:5901`，或开启 noVNC 后访问 `http://127.0.0.1:8080/vnc.html`。Ubuntu 24.04 的 `chromium-browser` 是 Snap 过渡包，无法像 Debian 的 Chromium 一样直接用于轻量容器；因此主分支在 `BUILD_CHROMIUM=1` 时通过 HTTPS 安装 **Google Chrome 官方 AMD64 DEB**（有额外的服务条款并显著增大镜像）。启用浏览器还需设置 `CHROMIUM=1` 再重建镜像。VNC 传统密码最多使用前 8 位。
 
 ## 验证与排错
 
@@ -217,7 +218,7 @@ docker exec atrust curl -Iv https://your-authorized-intranet-host
 
 `docker inspect` 应只显示一个 Bind 目录挂载，目标是 `/opt/atrust`；`/dev/net/tun` 是设备直通，不会计入目录挂载。
 
-如果报缺少 DEB，确认 `runtime/aTrustInstaller_amd64.deb` 存在且为**普通文件**。如果认证失败，检查 `runtime/data/root` 是否正确持久化、`utun7` 接口和 aTrust 日志。只出现 `utun7` 并不意味着 VPN 已登录成功。Ubuntu 测试分支不使用 Debian 11 快照源。官方 DEB 自带 OpenSSL 1.1、LDAP 2.4、Qt5，但旧版 LDAP 组件引用 libgnutls.so.26/libgcrypt.so.11，是否运行时加载仍须验证。
+如果报缺少 DEB，确认 `runtime/aTrustInstaller_amd64.deb` 存在且为**普通文件**。如果认证失败，检查 `runtime/data/root` 是否正确持久化、`utun7` 接口和 aTrust 日志。只出现 `utun7` 并不意味着 VPN 已登录成功。Ubuntu 镜像不使用 Debian 11 快照源。官方 DEB 自带 OpenSSL 1.1、LDAP 2.4、Qt5，但旧版 LDAP 组件引用 libgnutls.so.26/libgcrypt.so.11，是否运行时加载仍须验证。
 
 当前源码已经能够进行静态检查，但尚未在本操作环境完成 Docker 全量构建以及实际 VPN 登录测试。
 
@@ -233,7 +234,7 @@ sudo apt-get install -y python3 dpkg binutils
 python3 analyze-deps.py runtime/aTrustInstaller_amd64.deb
 # 与已经构建的运行镜像比较（可选）：
 python3 analyze-deps.py runtime/aTrustInstaller_amd64.deb \
-  --image local/atrust:latest
+  --image tingjusting/atrust:latest
 \`\`\`
 
 生成 \`runtime/data/atrust-dependencies.md\` 和

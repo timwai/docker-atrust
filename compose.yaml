@@ -1,6 +1,6 @@
 services:
   atrust:
-    image: ${ATRUST_IMAGE:-local/atrust:latest}
+    image: ${ATRUST_IMAGE:-tingjusting/atrust:latest}
     build:
       context: .
       args:

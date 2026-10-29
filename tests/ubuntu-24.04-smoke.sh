@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Lightweight runtime image checks. Does NOT install proprietary aTrust.
 set -Eeuo pipefail
-IMAGE="${1:-local/atrust:latest}"
+IMAGE="${1:-tingjusting/atrust:latest}"
 docker image inspect "$IMAGE" >/dev/null
 docker run --rm --pull=never --network=none --entrypoint=/bin/bash "$IMAGE" -ec '
     . /etc/os-release
