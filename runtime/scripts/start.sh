@@ -24,7 +24,15 @@ cd /root
 bash /opt/atrust/scripts/install-atrust.sh "${ATRUST_DEB:-/opt/atrust/aTrustInstaller_amd64.deb}"
 
 [[ -c /dev/net/tun ]] || die '/dev/net/tun is missing; check Docker device mapping'
-[[ -n "${PASSWORD:-}" ]] || die 'VNC_PASSWORD must be configured in .env'
+# Read the secret only at container startup; it must not appear in Compose
+# environment variables, Docker image layers or docker inspect output.
+vnc_password_file="${VNC_PASSWORD_FILE:-/opt/atrust/vnc-password}"
+[[ -f "$vnc_password_file" && ! -L "$vnc_password_file" ]] ||
+    die 'Missing VNC password file: create runtime/vnc-password with ./set-vnc-password.sh on the host'
+vnc_secret=''
+IFS= read -r vnc_secret < "$vnc_password_file" || [[ -n "$vnc_secret" ]] ||
+    die 'VNC password file is empty'
+[[ -n "$vnc_secret" ]] || die 'VNC password file is empty'
 eval "$(vpn-config.sh)"
 [[ "${_VPN_TYPE:-}" == ATRUST ]] || die 'aTrust installation has not initialized /etc/vpn-type'
 
@@ -63,7 +71,8 @@ socat TCP-LISTEN:20000,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:54631 &
 auth_relay_pid=$!
 
 mkdir -p /root/.vnc
-printf '%s' "$PASSWORD" | tigervncpasswd -f > /root/.vnc/passwd
+printf '%s' "$vnc_secret" | tigervncpasswd -f > /root/.vnc/passwd
+unset vnc_secret
 chmod 0600 /root/.vnc/passwd
 export DISPLAY=:1
 tigervncserver :1 -geometry "${VNC_SIZE:-1110x620}" -localhost no \

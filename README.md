@@ -4,6 +4,8 @@
 
 **默认 Docker 镜像名称为 `tingjusting/atrust:latest`**（只改变本地镜像标签，不会自动推送 Docker Hub）。如果旧的 `.env` 仍有 `ATRUST_IMAGE=local/atrust:latest`，需要手动改成新名称；`./build.sh` 默认也构建 `tingjusting/atrust:latest`。
 
+**VNC 密码只在运行时配置**：执行 `./set-vnc-password.sh`，密码保存到宿主机 `runtime/vnc-password`（`0600`，不提交 Git，不参与 Docker 构建）；Compose 只传 `VNC_PASSWORD_FILE` 路径，不再将密码放进容器环境变量，因此 `docker inspect` 也不会暴露新配置的明文密码。VNC 的加密口令文件保存在 `runtime/data/root/.vnc/passwd`，同样不在镜像中。
+
 **当前设计：所有需要持久化或外挂的内容，只映射一个宿主机目录 `./runtime:/opt/atrust`。** 不内置 aTrust 官方 DEB；新容器启动时从该目录安装。没有 SOCKS5/HTTP 正向代理，保留 VNC、可选 noVNC 和厂商网页登录回调。网络模式仍为 Docker Compose 默认 bridge，不共享宿主机网络。
 
 > 本工程为非官方社区衍生项目，与深信服及相关运营商无隶属关系。使用企业 VPN 前请确认授权；不提供规避厂商认证、MFA 或终端安全控制的功能。请不要公开企业专属 DEB、配置、证书及登录数据。
@@ -82,10 +84,12 @@ docker-atrust/
 ├── Dockerfile
 ├── compose.yaml
 ├── build.sh
+├── set-vnc-password.sh                     # 宿主机交互设置 VNC 密码
 ├── runtime/                              # 唯一宿主机挂载目录
 │   ├── scripts/
 │   │   ├── start.sh                      # 外挂容器入口脚本
 │   │   └── install-atrust.sh             # 容器启动安装脚本
+│   ├── vnc-password                       # 私有 VNC 密码文件（0600，不提交 Git）
 │   ├── aTrustInstaller_amd64.deb         # 自行放入，不提交 Git
 │   └── data/
 │       └── root/                        # aTrust、VNC、浏览器及登录状态
@@ -108,6 +112,7 @@ volumes:
 此目录同时提供：
 
 - `/opt/atrust/scripts/start.sh` 和 `install-atrust.sh`（容器入口脚本由宿主机提供）
+- `/opt/atrust/vnc-password`（宿主机单独设置的 VNC 密码文件；只在容器启动时读取）
 - `/opt/atrust/aTrustInstaller_amd64.deb`（新容器启动时安装；不会 COPY 到镜像）
 - `/opt/atrust/data/root`（持久化的 root HOME）
 
@@ -135,7 +140,8 @@ chmod 600 runtime/aTrustInstaller_amd64.deb
 
 cp .env.example .env
 chmod 600 .env
-nano .env   # VNC_PASSWORD 必须设置
+nano .env   # 配置镜像、浏览器等非密码选项
+./set-vnc-password.sh  # 交互输入密码，不写入镜像或容器环境变量
 
 docker compose up -d --build
 docker compose logs -f
@@ -166,7 +172,18 @@ docker compose up -d --build --force-recreate
 docker compose logs -f
 ```
 
+如果升级前 `.env` 已存在 `VNC_PASSWORD`，先运行 `./set-vnc-password.sh` 创建新的密码文件，之后手动从 `.env` 中删除旧的 `VNC_PASSWORD` 行；旧容器需要重建才能消除 `docker inspect` 中此前传入的明文密码。不要直接执行 `docker compose config` 后将包含旧密码的输出上传到公开位置。
+
 如果修改过旧 `scripts/start.sh`，请先备份并**人工合并**改动到 `runtime/scripts/start.sh`，不能直接用旧脚本覆盖新脚本，否则会失去单目录模式的 HOME 初始化逻辑。上面的迁移命令假定历史 `./data` 确实存储的是容器 `/root`。
+
+### 设置和更换 VNC 密码
+
+```bash
+./set-vnc-password.sh
+docker compose up -d --force-recreate
+```
+
+交互输入时密码不会回显，也不作为 Docker 构建参数或容器环境变量传递。请对宿主机 `runtime/` 及其备份严格控制访问权限。TigerVNC 传统 VNC 密码只使用前 8 个字符；建议保持端口绑定回环地址并通过 SSH 隧道访问。
 
 ### 日常使用
 

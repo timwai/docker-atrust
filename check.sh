@@ -11,6 +11,12 @@ if [[ "$mount_count" != 1 || "$mount_type_target" != 'bind:/opt/atrust' ]]; then
   exit 1
 fi
 echo "Single bind mount: /opt/atrust OK"
+# Do not print environment values, since old container configurations may contain secrets.
+if docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$NAME" | grep -Eq '^(PASSWORD|VNC_PASSWORD)='; then
+  echo "Unsafe plaintext VNC password in Docker container environment; recreate with runtime/vnc-password" >&2
+  exit 1
+fi
+echo "No plaintext VNC password in container environment"
 docker exec "$NAME" sh -c '
   echo "=== Installed aTrust ==="
   test -x /usr/share/sangfor/aTrust/aTrustTray && echo "aTrustTray installed" || echo "aTrustTray not installed"

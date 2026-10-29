@@ -1,5 +1,6 @@
 # The single runtime directory contains a proprietary client and private state.
 /runtime/data/
+/runtime/vnc-password
 /runtime/*.deb
 /runtime/*.rpm
 /runtime/*.zip

@@ -15,7 +15,8 @@ services:
     sysctls:
       net.ipv4.conf.default.route_localnet: '1'
     environment:
-      PASSWORD: ${VNC_PASSWORD:?Set VNC_PASSWORD in the private .env file}
+      # Plaintext VNC passwords are read only from the runtime bind mount.
+      VNC_PASSWORD_FILE: /opt/atrust/vnc-password
       URLWIN: '1'
       CHROMIUM: ${CHROMIUM:-0}
       USE_NOVNC: ${USE_NOVNC:-}
