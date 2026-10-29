@@ -13,6 +13,7 @@ services:
       PASSWORD: ${VNC_PASSWORD:?Set VNC_PASSWORD in the private .env file}
       URLWIN: '1'
       CHROMIUM: ${CHROMIUM:-}
+      USE_NOVNC: ${USE_NOVNC:-}
     volumes:
       - ./data:/root
     ports:
@@ -20,3 +21,4 @@ services:
       - '127.0.0.1:1080:1080'
       - '127.0.0.1:8888:8888'
       - '127.0.0.1:54631:54631'
+      - '127.0.0.1:8080:8080' # optional noVNC

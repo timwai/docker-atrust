@@ -32,7 +32,7 @@ RUN . /tmp/build-scripts/config-apt.sh && \
     rm -rf /var/lib/apt/lists/*
 RUN groupadd -r socks && useradd -r -g socks socks
 COPY docker-root-preinst /
-COPY build-scripts/install-vpn-gui.sh /tmp/build-scripts/install-vpn-gui.sh
+COPY build-scripts/install-vpn-gui.sh build-scripts/get-echost-names.sh /tmp/build-scripts/
 COPY vendor/aTrustInstaller_amd64.deb /tmp/VPN.deb
 ENV VPN_TYPE=ATRUST
 RUN chmod +x /tmp/build-scripts/install-vpn-gui.sh && \
