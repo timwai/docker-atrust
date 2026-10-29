@@ -158,3 +158,25 @@ docker exec atrust curl -Iv https://your-authorized-intranet-host
 如果报缺少 DEB，确认 `runtime/aTrustInstaller_amd64.deb` 存在且为**普通文件**。如果认证失败，检查 `runtime/data/root` 是否正确持久化、`utun7` 接口和 aTrust 日志。只出现 `utun7` 并不意味着 VPN 已登录成功。本工程仍使用旧版 Debian 11 兼容库历史快照，它们可能存在不再更新的安全风险。
 
 当前源码已经能够进行静态检查，但尚未在本操作环境完成 Docker 全量构建以及实际 VPN 登录测试。
+
+
+## aTrust 2.5.16.30 动态库依赖分析
+
+分析单位门户下载的原始 **Ubuntu amd64** 官方 DEB（无需在宿主机安装 aTrust）。
+分析脚本只执行 \`dpkg-deb -x\` 和 \`readelf\`，不执行官方程序，也不执行 preinst/postinst。
+
+\`\`\`bash
+sudo apt-get install -y python3 dpkg binutils
+# 将正式安装包保存在唯一 runtime 目录：
+python3 analyze-deps.py runtime/aTrustInstaller_amd64.deb
+# 与已经构建的运行镜像比较（可选）：
+python3 analyze-deps.py runtime/aTrustInstaller_amd64.deb \
+  --image local/atrust:latest
+\`\`\`
+
+生成 \`runtime/data/atrust-dependencies.md\` 和
+\`runtime/data/atrust-dependencies.json\`。前者是人类可读的依赖报告；
+后者列出每个 ELF 的 \`DT_NEEDED\`，便于判断哪些旧库确实被使用。
+
+**注意**：\`DT_NEEDED\` 不包含运行时 \`dlopen\` 或插件依赖；即使未发现
+\`libssl.so.1.1\` 或 \`libldap_r-2.4.so.2\`，也不能直接证明删除旧库后一定可正常登录。
