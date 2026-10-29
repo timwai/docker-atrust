@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "$0")" && pwd)"
 cd "$ROOT"
-IMAGE_REPO="${IMAGE_REPO:-local/atrust}"
+IMAGE_REPO="${IMAGE_REPO:-tingjusting/atrust}"
 ATRUST_VERSION="${ATRUST_VERSION:-2.5.16.30}"
 CHROMIUM=0
 DEB_SOURCE=""
@@ -12,7 +12,7 @@ DEB_VALUE=""
 usage() {
   cat <<'USAGE'
 Usage:
-  ./build.sh [--chromium]                           # image only; no aTrust DEB required
+  ./build.sh [--chromium]                           # runtime only; Ubuntu 24.04 + optional Chrome DEB
   ./build.sh --deb /path/to/aTrustInstaller_amd64.deb [--chromium]
   ./build.sh --official [--chromium]                # fetch official public DEB to runtime/
   ./build.sh --local [--chromium]                   # validate runtime/ DEB then build
