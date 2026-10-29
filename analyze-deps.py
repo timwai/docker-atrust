@@ -72,16 +72,25 @@ def main():
         if not shutil.which("docker"):
             image_error = "Docker CLI not installed"
         else:
-            # Only a system-library listing; no aTrust process or external network.
-            probe = cmd(["docker", "run", "--rm", "--network=none",
-                         "--entrypoint", "/bin/sh", a.image, "-c",
-                         "ldconfig -p 2>/dev/null || true"], check=False)
-            if probe.returncode:
-                image_error = (probe.stderr or probe.stdout)[-400:]
+            # Check local availability before docker run: Docker otherwise pulls
+            # non-existent "local/..." images from a remote registry.
+            inspect = cmd(["docker", "image", "inspect", a.image], check=False)
+            if inspect.returncode:
+                image_error = ("Local image %s not found. Build it with ./build.sh "
+                               "or omit --image for pure static analysis." % a.image)
             else:
-                image_libs = set(re.findall(
-                    r"^\s*(\S+\.so(?:\.\S+)?)\s+\(",
-                    probe.stdout, re.M))
+                # Compare the image WITHOUT triggering a registry pull.
+                # No aTrust client or external network is needed for this step.
+                probe = cmd(["docker", "run", "--rm", "--pull=never",
+                             "--network=none", "--entrypoint", "/bin/sh",
+                             a.image, "-c", "ldconfig -p 2>/dev/null || true"],
+                            check=False)
+                if probe.returncode:
+                    image_error = (probe.stderr or probe.stdout)[-400:]
+                else:
+                    image_libs = set(re.findall(
+                        r"^\s*(\S+\.so(?:\.\S+)?)\s+\(",
+                        probe.stdout, re.M))
     legacy = ("libssl.so.1.1", "libcrypto.so.1.1",
               "libldap-2.4.so", "libldap_r-2.4.so", "liblber-2.4.so",
               "libQt5Core.so", "libQt5Widgets.so", "libQt5Network.so")
