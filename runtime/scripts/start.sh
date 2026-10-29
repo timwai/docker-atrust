@@ -79,8 +79,17 @@ if [[ -n "${USE_NOVNC:-}" ]]; then
     novnc_pid=$!
 fi
 if [[ "${CHROMIUM:-0}" == 1 ]]; then
-    command -v chromium >/dev/null || die 'Chromium not installed: rebuild with BUILD_CHROMIUM=1'
-    chromium --no-sandbox --display=:1 >/dev/null 2>&1 &
+    # Ubuntu's chromium-browser is Snap-only; BUILD_CHROMIUM=1 installs the
+    # official Chrome DEB instead. Allow Chromium in custom images.
+    if command -v google-chrome-stable >/dev/null 2>&1; then
+        browser=google-chrome-stable
+    elif command -v chromium >/dev/null 2>&1; then
+        browser=chromium
+    else
+        die 'Browser missing: rebuild with BUILD_CHROMIUM=1'
+    fi
+    "$browser" --no-sandbox --disable-dev-shm-usage --disable-gpu \
+        --no-first-run --no-default-browser-check >/dev/null 2>&1 &
     chromium_pid=$!
 fi
 

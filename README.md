@@ -10,7 +10,68 @@
 
 本项目基于 [docker-easyconnect/docker-easyconnect](https://github.com/docker-easyconnect/docker-easyconnect) 改造，最初导入的上游源码版本是 [`e8fc56a7c518d83b6817e16713f765e3c652e3bf`](https://github.com/docker-easyconnect/docker-easyconnect/commit/e8fc56a7c518d83b6817e16713f765e3c652e3bf)。致谢原作者 Hagb 及 docker-easyconnect 贡献者，保留 [LICENSE.txt](LICENSE.txt)（WTFPL v2）。本仓库的开源许可**不覆盖**深信服 aTrust 专有客户端、商标或其下载包；Debian、TigerVNC、noVNC 等仍适用各自许可证。
 
-本项目将用到的上游辅助脚本和 C 源文件直接收录在当前仓库，镜像构建阶段不克隆其他 GitHub 仓库。构建仍需要 Debian 基础镜像与 Debian APT 仓库；明确使用 `--official` 时还需深信服官方 CDN。
+本项目将用到的上游辅助脚本和 C 源文件直接收录在当前仓库，镜像构建阶段不克隆其他 GitHub 仓库。Ubuntu 24.04 测试分支的构建仍需要 Ubuntu 基础镜像与 Ubuntu APT 仓库；明确使用 `--official` 时还需深信服官方 CDN。
+
+## Ubuntu 24.04 精简运行镜像（测试分支）
+
+此分支针对企业门户提供的 **aTrust 2.5.16.30 Ubuntu AMD64 DEB** 做适配；保留 Docker Bridge、`./runtime:/opt/atrust` 唯一目录映射、VNC 和容器首次启动安装客户端的架构，不提供 HTTP/SOCKS 正向代理。
+
+- 两个构建阶段统一使用 `ubuntu:24.04`，所有系统包使用 Ubuntu 官方 APT 仓库（包括 universe），不再配置 Debian 11 历史快照。
+- 删除系统 `libssl1.1`、`libldap-2.4-2`、重复的 Qt5 运行包，以及不用于运行的 `libssl-dev`，优先使用厂商 DEB 自带的库。
+- 明确提供 Qt XCB 插件、GTK、X11 需要的底层系统动态库；系统依赖清单基于 129 个 ELF 的 `DT_NEEDED` 分析，但未覆盖 `dlopen`。
+- 默认不内置浏览器（`BUILD_CHROMIUM=0`）；若设为 `1`，安装官方 Google Chrome DEB，而非 Ubuntu 的 Snap 过渡包。
+- 注意：厂商自带的 `libldap_r-2.4.so.2` 仍引用旧版 `libgnutls.so.26`、`libgcrypt.so.11`，两者在 Ubuntu 24.04 中并非原生系统库。静态扫描未发现主进程直接依赖该 LDAP 库，但这**不代表该功能无风险**；遇到登录问题请先检查动态库实际加载记录。
+
+### 从 main 切换到测试分支
+
+**先备份** `runtime/data/root`、`.env` 和自定义脚本，切换 Git 分支前确认工作区没有未提交的改动。请不要将 DEB 或企业配置提交到 Git。
+
+```bash
+cd ~/docker/docker-atrust
+git fetch origin ubuntu-24.04
+git switch --track origin/ubuntu-24.04  # 首次切换
+# 已有本地 ubuntu-24.04 分支则使用 git switch ubuntu-24.04
+docker compose config -q
+
+# 不安装可选浏览器的最小镜像
+docker compose build --no-cache
+bash tests/ubuntu-24.04-smoke.sh local/atrust:latest
+
+# 确保 runtime/aTrustInstaller_amd64.deb 已存在
+docker compose up -d --force-recreate
+docker compose logs -f
+```
+
+如果需要容器内部的浏览器完成认证，将 `.env` 设置为 `BUILD_CHROMIUM=1`、`CHROMIUM=1` 再运行：
+
+```bash
+docker compose up -d --build --force-recreate
+```
+
+`BUILD_CHROMIUM=1` 使用 Google 官方 Chrome DEB：镜像体积可能明显增大，且构建时须访问 `dl.google.com`；`BUILD_CHROMIUM=0` 不依赖 Google 下载服务。请遵守官方 Chrome 软件许可和安全更新要求。
+
+### 初步验证与回退
+
+```bash
+./check.sh
+docker exec atrust cat /etc/os-release
+docker exec atrust ldd /usr/share/sangfor/aTrust/resources/bin/aTrustAgent | grep -E 'not found|ssl|crypto|Qt5' || true
+docker image inspect local/atrust:latest --format '{{.Size}}'
+docker ps -s
+```
+
+`ldd` 适用于你从授权门户取得且可信的客户端文件；对不可信 ELF 不要运行它。**单纯构建和静态检查不代表 VPN 实际可登录。**
+
+测试失败可切换回 `main` 并重新构建：
+
+```bash
+docker compose down
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --force-recreate
+```
+
+切换分支不会删除唯一映射目录中的登录状态，但更换基础系统后仍须留意厂商的设备绑定/登录状态兼容性。
 
 ## 只有一个目录挂载
 
@@ -142,7 +203,7 @@ ssh -L 5901:127.0.0.1:5901 -L 54631:127.0.0.1:54631 \
     -L 8080:127.0.0.1:8080 user@ubuntu-server
 ```
 
-VNC Viewer 连接 `127.0.0.1:5901`，或开启 noVNC 后访问 `http://127.0.0.1:8080/vnc.html`。需要浏览器时把 `BUILD_CHROMIUM=1`、`CHROMIUM=1` 写入 `.env`，再重建镜像。VNC 传统密码最多使用前 8 位。
+VNC Viewer 连接 `127.0.0.1:5901`，或开启 noVNC 后访问 `http://127.0.0.1:8080/vnc.html`。Ubuntu 24.04 的 `chromium-browser` 是 Snap 过渡包，无法像 Debian 的 Chromium 一样直接用于轻量容器；因此测试分支在 `BUILD_CHROMIUM=1` 时通过 HTTPS 安装 **Google Chrome 官方 AMD64 DEB**（有额外的服务条款并显著增大镜像）。启用浏览器还需设置 `CHROMIUM=1` 再重建镜像。VNC 传统密码最多使用前 8 位。
 
 ## 验证与排错
 
@@ -155,7 +216,7 @@ docker exec atrust curl -Iv https://your-authorized-intranet-host
 
 `docker inspect` 应只显示一个 Bind 目录挂载，目标是 `/opt/atrust`；`/dev/net/tun` 是设备直通，不会计入目录挂载。
 
-如果报缺少 DEB，确认 `runtime/aTrustInstaller_amd64.deb` 存在且为**普通文件**。如果认证失败，检查 `runtime/data/root` 是否正确持久化、`utun7` 接口和 aTrust 日志。只出现 `utun7` 并不意味着 VPN 已登录成功。本工程仍使用旧版 Debian 11 兼容库历史快照，它们可能存在不再更新的安全风险。
+如果报缺少 DEB，确认 `runtime/aTrustInstaller_amd64.deb` 存在且为**普通文件**。如果认证失败，检查 `runtime/data/root` 是否正确持久化、`utun7` 接口和 aTrust 日志。只出现 `utun7` 并不意味着 VPN 已登录成功。Ubuntu 测试分支不使用 Debian 11 快照源。官方 DEB 自带 OpenSSL 1.1、LDAP 2.4、Qt5，但旧版 LDAP 组件引用 libgnutls.so.26/libgcrypt.so.11，是否运行时加载仍须验证。
 
 当前源码已经能够进行静态检查，但尚未在本操作环境完成 Docker 全量构建以及实际 VPN 登录测试。
 
