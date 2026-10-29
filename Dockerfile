@@ -33,7 +33,11 @@ COPY docker-root-preinst /
 COPY build-scripts/install-vpn-gui.sh build-scripts/get-echost-names.sh /tmp/build-scripts/
 COPY docker-root /
 COPY --from=tooling /results/ /
-RUN ln -sf novnc-min-size.sh /usr/local/bin/novnc
+# Make vendor state under /root survive container recreation using the sole runtime mount.
+# The old /root contents remain as a read-only bootstrap template.
+RUN ln -sf novnc-min-size.sh /usr/local/bin/novnc && \
+    mv /root /root.image && \
+    ln -s /opt/atrust/data/root /root
 ENV VPN_TYPE=ATRUST
 EXPOSE 5901 54631 8080
 # Host-mounted entrypoint and installer are supplied by compose.yaml.

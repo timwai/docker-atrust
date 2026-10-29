@@ -1,156 +1,160 @@
 # docker-atrust
 
-在 Ubuntu Server（amd64）等无宿主机桌面环境下，以 Docker 运行深信服 aTrust Linux 客户端。
+无需宿主机图形桌面，在 Ubuntu Server（amd64）上通过 Docker 使用深信服 aTrust Linux 客户端。
 
-**当前设计（2026-10）：** Docker 镜像只包含 Debian 运行依赖和开源辅助程序；**aTrust DEB 不进入镜像**，在每个新容器第一次启动时由挂载的脚本安装。整个服务**没有 SOCKS5 或 HTTP 正向代理**，仅提供 VNC 登录界面、可选 noVNC 和 aTrust 官方网页认证回调。
+**当前设计：所有需要持久化或外挂的内容，只映射一个宿主机目录 `./runtime:/opt/atrust`。** 不内置 aTrust 官方 DEB；新容器启动时从该目录安装。没有 SOCKS5/HTTP 正向代理，保留 VNC、可选 noVNC 和厂商网页登录回调。网络模式仍为 Docker Compose 默认 bridge，不共享宿主机网络。
 
-> 非官方社区衍生项目。使用企业 VPN 前请获得单位授权；客户端的合法使用、身份验证、多因素认证与终端管理策略依旧适用。请勿把企业特定 DEB、账号、证书或登录配置提交至公开仓库。
+> 本工程为非官方社区衍生项目，与深信服及相关运营商无隶属关系。使用企业 VPN 前请确认授权；不提供规避厂商认证、MFA 或终端安全控制的功能。请不要公开企业专属 DEB、配置、证书及登录数据。
 
 ## 来源与许可证
 
-本项目代码最初基于 [docker-easyconnect/docker-easyconnect](https://github.com/docker-easyconnect/docker-easyconnect) 调整，最初导入参考版本为 [`e8fc56a7c518d83b6817e16713f765e3c652e3bf`](https://github.com/docker-easyconnect/docker-easyconnect/commit/e8fc56a7c518d83b6817e16713f765e3c652e3bf)。
+本项目基于 [docker-easyconnect/docker-easyconnect](https://github.com/docker-easyconnect/docker-easyconnect) 改造，最初导入的上游源码版本是 [`e8fc56a7c518d83b6817e16713f765e3c652e3bf`](https://github.com/docker-easyconnect/docker-easyconnect/commit/e8fc56a7c518d83b6817e16713f765e3c652e3bf)。致谢原作者 Hagb 及 docker-easyconnect 贡献者，保留 [LICENSE.txt](LICENSE.txt)（WTFPL v2）。本仓库的开源许可**不覆盖**深信服 aTrust 专有客户端、商标或其下载包；Debian、TigerVNC、noVNC 等仍适用各自许可证。
 
-- **上游作者及贡献者**：docker-easyconnect / Hagb 等贡献者。
-- **上游开源代码许可证**：WTFPL v2，原文保留于 [LICENSE.txt](LICENSE.txt)。仓库衍生脚本同样按该许可证发布。
-- **aTrust 客户端**：深信服 Sangfor 的专有软件，其版权、许可、商标及企业部署政策不受本仓库开源许可证覆盖，本仓库不分发 aTrust DEB。
-- **其他依赖**：Debian、TigerVNC、noVNC、Websockify 等分别遵循其自身许可证。
+本项目将用到的上游辅助脚本和 C 源文件直接收录在当前仓库，镜像构建阶段不克隆其他 GitHub 仓库。构建仍需要 Debian 基础镜像与 Debian APT 仓库；明确使用 `--official` 时还需深信服官方 CDN。
 
-相对于上游，此仓库已经取消了 EasyConnect、Dante SOCKS5、Tinyproxy HTTP 代理及下载其他 GitHub 项目进行构建的流程；运行和安装所需开源代码已保存在当前仓库。构建仍需下载 Debian 基础镜像和 APT 依赖；只有明确指定 `--official` 才会下载深信服公共 DEB，不构成完全离线构建。
-
-## 目录与启动流程
+## 只有一个目录挂载
 
 ```text
 docker-atrust/
-├── Dockerfile                         # Debian 12 + aTrust 依赖；不装客户端
-├── compose.yaml                       # bind mount 启动脚本与 DEB
-├── build.sh                           # 构建通用运行时镜像、可选准备 DEB
-├── scripts/
-│   ├── start.sh                       # 外挂入口脚本，修改后无需重建镜像
-│   └── install-atrust.sh              # 容器启动时执行 DEB 安装
-├── build-scripts/install-vpn-gui.sh   # 与 aTrust 兼容的包安装逻辑
-├── docker-root/                       # aTrust Agent、VNC、路由相关脚本
-├── docker-root-preinst/               # aTrust 容器兼容组件
-├── fake-getlogin/                     # 来自上游的本地 C 辅助组件
-├── fake-hwaddr/                       # 来自上游的本地 C 辅助组件
-├── vendor/
-│   └── aTrustInstaller_amd64.deb      # 自行准备，不会提交 GitHub/打进镜像
-└── data/                              # 运行数据（宿主机持久化，不提交 GitHub）
+├── Dockerfile
+├── compose.yaml
+├── build.sh
+├── runtime/                              # 唯一宿主机挂载目录
+│   ├── scripts/
+│   │   ├── start.sh                      # 外挂容器入口脚本
+│   │   └── install-atrust.sh             # 容器启动安装脚本
+│   ├── aTrustInstaller_amd64.deb         # 自行放入，不提交 Git
+│   └── data/
+│       └── root/                        # aTrust、VNC、浏览器及登录状态
+├── build-scripts/                        # 镜像内安装适配逻辑
+├── docker-root/                          # aTrust/VNC/路由脚本
+├── docker-root-preinst/
+├── fake-getlogin/
+└── fake-hwaddr/
 ```
 
-启动过程：
+唯一一条 Compose `volumes` 配置：
 
-1. Compose 以只读 bind mount 把 `./scripts` 放入 `/opt/atrust/scripts`，把 DEB 放入 `/opt/atrust/aTrustInstaller_amd64.deb`。
-2. 容器入口执行 `/bin/bash /opt/atrust/scripts/start.sh`。
-3. 入口调用 `install-atrust.sh`，执行官方包的 preinst/postinst；同一容器内按 DEB SHA256 跳过重复安装。**镜像里没有 aTrust 安装文件。**
-4. 创建独立 `utun7`（之前由 Dante 提前创建），启动 VNC/可选 noVNC、aTrust Agent 和登录界面。
-5. 容器重启时复用已安装的客户端；容器**删除重建**后重新安装。更换 DEB 时需要重新创建容器。
+```yaml
+volumes:
+  - type: bind
+    source: ./runtime
+    target: /opt/atrust
+```
 
-## 环境
+此目录同时提供：
 
-- Ubuntu Server amd64 / Docker Engine 和 Docker Compose。
-- `/dev/net/tun` 可用，容器具备 `NET_ADMIN`。
-- `vendor/aTrustInstaller_amd64.deb` 必须是获得合法授权的 AMD64 aTrust 安装包，且必须在创建容器**之前**存在并且是普通文件。
-- 宿主机无需 X11、Wayland 或 GNOME；容器内部通过 TigerVNC 提供图形化登录。
-- PVE LXC 嵌套 Docker 可能遇到 AppArmor/runc 或 TUN 限制，建议优先使用 KVM 虚拟机。
+- `/opt/atrust/scripts/start.sh` 和 `install-atrust.sh`（容器入口脚本由宿主机提供）
+- `/opt/atrust/aTrustInstaller_amd64.deb`（新容器启动时安装；不会 COPY 到镜像）
+- `/opt/atrust/data/root`（持久化的 root HOME）
 
-## 安装与启动
+镜像构建时预置 `/root -> /opt/atrust/data/root` 符号链接，使 aTrust 根据用户数据库解析到 `/root` 时，仍将数据写入唯一挂载目录。容器启动时会自动创建目录、初始化基础 home 文件，并设置 `0700` 权限。
+
+`devices: /dev/net/tun:/dev/net/tun` 是提供 VPN TUN 的**设备映射**，不是第二个目录挂载，仍必须保留。Compose 的 `.env` 从宿主机读取，并没有映射为文件或目录。
+
+**安全权衡**：仅使用一个读写挂载意味着脚本、安装包与持久化数据位于同一个可写目录，无法像原方案那样把脚本和 DEB 分别以 `:ro` 方式挂载。请限制 `runtime/` 目录和 Docker 主机访问权限，不要在其中保存非必要密钥。此服务运行在可信受管理环境内。
+
+## 准备与启动
+
+先确认宿主机安装了 Docker Engine、Compose，并有 `/dev/net/tun`。
 
 ```bash
 git clone https://github.com/timwai/docker-atrust.git
 cd docker-atrust
 
-# 放入已从企业门户或厂商获得的正版客户端
-mkdir -p vendor data
-cp /path/to/aTrustInstaller_amd64.deb vendor/
-chmod 700 data
+# runtime/scripts/ 已经在 Git 中，不需要额外复制启动脚本
+mkdir -p runtime/data/root
+chmod 700 runtime runtime/data runtime/data/root
+
+# 将获得授权的官方 aTrust AMD64 安装包放到唯一目录
+cp /path/to/aTrustInstaller_amd64.deb runtime/aTrustInstaller_amd64.deb
+chmod 600 runtime/aTrustInstaller_amd64.deb
 
 cp .env.example .env
 chmod 600 .env
-# 编辑 VNC_PASSWORD（VNC 协议传统密码最多使用前8个字符）
-nano .env
+nano .env   # VNC_PASSWORD 必须设置
 
-# 构建的是“运行环境”，不是打包好的 aTrust 客户端
-docker compose build
-
-# 创建容器时安装挂载的 aTrust DEB，随后启动客户端
-docker compose up -d
-docker compose logs --tail=100 -f
+docker compose up -d --build
+docker compose logs -f
 ```
 
-也可运行 `./build.sh` 构建通用镜像；`./build.sh --deb /path/to/aTrustInstaller_amd64.deb` 会将 DEB **保存在宿主机** `vendor/` 后构建镜像（不会 COPY 到镜像中）。要从厂商公开 CDN 获取 2.5.16.30 的测试包，可显式使用 `./build.sh --official`（可通过 `ATRUST_VERSION` 自定义版本；优先使用企业门户包）。
+也可以直接 `./build.sh` 构建纯运行环境；`./build.sh --deb /path/to/aTrustInstaller_amd64.deb` 会将 DEB 放在宿主机的 `runtime/`，并构建同一个不含客户端的镜像。使用 `--official` 需自行确认有权使用官方公共包。
 
-### 升级或调整
+### 从旧版三挂载配置迁移
 
-**修改外部启动脚本**（如 `scripts/start.sh`）：修改宿主机文件后执行 `docker compose restart`，无需构建镜像。请勿把脚本、DEB 或数据目录映射为可从容器修改的读写挂载。
+原版使用 `./data:/root`、`./scripts:/opt/atrust/scripts`、`./vendor/aTrustInstaller_amd64.deb:/opt/atrust/aTrustInstaller_amd64.deb`。更新前先备份，停掉旧容器，然后迁移：
 
-**更新 aTrust DEB**：替换宿主机 `vendor/aTrustInstaller_amd64.deb`，然后：
+```bash
+# 在旧版仓库目录运行；优先备份 data/ 里的登录状态
+docker compose down
+cp -a data data.backup 2>/dev/null || true
+
+git pull --ff-only origin main
+mkdir -p runtime/data/root
+# 复制原有 HOME 数据（切勿覆盖已有备份）
+if [ -d data ]; then cp -an data/. runtime/data/root/; fi
+if [ -f vendor/aTrustInstaller_amd64.deb ]; then
+  cp -n vendor/aTrustInstaller_amd64.deb runtime/aTrustInstaller_amd64.deb
+fi
+chmod 700 runtime/data/root
+
+# 现用启动脚本是 runtime/scripts/start.sh
+docker compose up -d --build --force-recreate
+docker compose logs -f
+```
+
+如果修改过旧 `scripts/start.sh`，请先备份并**人工合并**改动到 `runtime/scripts/start.sh`，不能直接用旧脚本覆盖新脚本，否则会失去单目录模式的 HOME 初始化逻辑。上面的迁移命令假定历史 `./data` 确实存储的是容器 `/root`。
+
+### 日常使用
+
+修改宿主机的 `runtime/scripts/start.sh` 后：
+
+```bash
+docker compose restart
+```
+
+换 DEB 后：
 
 ```bash
 docker compose up -d --force-recreate
 ```
 
-新容器会在启动时安装新版本。单纯 `docker compose restart` 复用旧容器文件系统，不会自动执行包覆盖升级；哈希不一致时会提示重新创建容器。
+修改 Dockerfile 依赖后：
 
-**修改 Dockerfile 或依赖包**：执行 `docker compose up -d --build --force-recreate`。
-
-### Chrome 内置认证与 noVNC
-
-如需容器内部 Chromium 以处理厂商网页认证，设置 `.env`：
-
-```ini
-BUILD_CHROMIUM=1
-CHROMIUM=1
+```bash
+docker compose up -d --build --force-recreate
 ```
 
-然后执行 `docker compose up -d --build --force-recreate`。
+重启同一容器时按已安装包的 SHA256 跳过安装；删除并新建容器时，容器本身的文件系统重置并重新安装 aTrust。安装标记保存在容器文件系统内部，而不是持久化目录，防止重建误跳过安装。
 
-如需浏览器远程查看图形界面，设置 `USE_NOVNC=1` 并 `docker compose up -d`。noVNC 本身不是 HTTP **代理**；它只通过 8080 提供 VNC 网页。
+### VNC 和网页认证
 
-## 网络端口
+端口仅绑定宿主机 `127.0.0.1`：
 
-| 容器端口 | 作用 |
+| 容器端口 | 用途 |
 | --- | --- |
-| `5901/tcp` | TigerVNC 登录界面 |
-| `54631/tcp` | aTrust 官方浏览器认证回调（容器内由 socat/iptables 仅转发至本机客户端） |
-| `8080/tcp` | 可选 noVNC 网页界面 |
-
-**没有 1080 SOCKS5 或 8888 HTTP 代理服务，也不通过宿主机自动共享 VPN 流量。** Compose 将所有端口绑定到宿主机 `127.0.0.1`，不允许直接向公网开放。通过 SSH 使用：
+| `5901/tcp` | TigerVNC |
+| `54631/tcp` | aTrust 网页认证回调 |
+| `8080/tcp` | 可选 noVNC（`.env` 设置 `USE_NOVNC=1`） |
 
 ```bash
 ssh -L 5901:127.0.0.1:5901 -L 54631:127.0.0.1:54631 \
     -L 8080:127.0.0.1:8080 user@ubuntu-server
 ```
 
-VNC Viewer 连接 `127.0.0.1:5901`，或启用 noVNC 后访问 `http://127.0.0.1:8080/vnc.html`。
+VNC Viewer 连接 `127.0.0.1:5901`，或开启 noVNC 后访问 `http://127.0.0.1:8080/vnc.html`。需要浏览器时把 `BUILD_CHROMIUM=1`、`CHROMIUM=1` 写入 `.env`，再重建镜像。VNC 传统密码最多使用前 8 位。
 
-## 验证
+## 验证与排错
 
 ```bash
+docker compose config
+docker inspect atrust --format '{{range .Mounts}}{{.Type}} {{.Source}} -> {{.Destination}}{{println}}{{end}}'
 ./check.sh
-# 已经成功通过 VNC 登录后，在容器自己的 VPN 网络环境中测试授权资源
-./check.sh https://your-authorized-intranet-host
-```
-
-确认 VPN 认证成功后，从容器内直连网络测试，不使用代理：
-
-```bash
-docker exec atrust ip -br address
-docker exec atrust ip route
 docker exec atrust curl -Iv https://your-authorized-intranet-host
 ```
 
-仅有 `utun7` 接口或 VNC 端口监听不代表成功连接 VPN。
+`docker inspect` 应只显示一个 Bind 目录挂载，目标是 `/opt/atrust`；`/dev/net/tun` 是设备直通，不会计入目录挂载。
 
-## 排错
+如果报缺少 DEB，确认 `runtime/aTrustInstaller_amd64.deb` 存在且为**普通文件**。如果认证失败，检查 `runtime/data/root` 是否正确持久化、`utun7` 接口和 aTrust 日志。只出现 `utun7` 并不意味着 VPN 已登录成功。本工程仍使用旧版 Debian 11 兼容库历史快照，它们可能存在不再更新的安全风险。
 
-- **首次启动报缺少 DEB**：确保 `vendor/aTrustInstaller_amd64.deb` 是已存在的普通文件；Docker 对不存在的文件型 bind mount 可能导致错误目录。
-- **运行时报权限错误**：检查 `/tmp`、`/tmp/aTrustShell.conf` 所有者；请勿关闭登录检查或禁用企业认证。
-- **`FIB table does not exist`**：首次清理空策略路由表的非致命提示，与业务 VPN 是否可用应分别验证。
-- **`libssl1.1` / `libldap-2.4-2`**：仍从签名校验的 Debian 11 历史快照获取，相关旧组件的安全维护风险应结合厂商新版本再评估。快照配置在 `build-scripts/config-apt.sh`。
-- **登录正常但内网不通**：检查容器内 `ip route` 和 `utun7`，并用授权内网 IP/域名直连，不再查找或配置 1080/8888。
-- **容器恢复**：`docker compose logs -f`，同一容器重启不会重复安装；容器重建需要挂载的 DEB 可读。
-- **构建与运行验证状态**：源码与脚本已提交，尚未在此执行环境完成 Docker 实际构建及单位 VPN 认证验证。
-
-## 项目许可证
-
-上游代码衍生部分保留 [LICENSE.txt](LICENSE.txt)（WTFPL v2），aTrust 官方客户端及企业专用配置不属于该开源许可证范畴。
+当前源码已经能够进行静态检查，但尚未在本操作环境完成 Docker 全量构建以及实际 VPN 登录测试。

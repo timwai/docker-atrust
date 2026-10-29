@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 deb="${1:-/opt/atrust/aTrustInstaller_amd64.deb}"
 [[ -f "$deb" && -s "$deb" ]] || {
-    echo "[atrust] Missing aTrust DEB at $deb; mount vendor/aTrustInstaller_amd64.deb" >&2
+    echo "[atrust] Missing aTrust DEB at $deb; put runtime/aTrustInstaller_amd64.deb in the single bind-mounted directory" >&2
     exit 1
 }
 pkg="$(dpkg-deb -f "$deb" Package)"

@@ -6,6 +6,20 @@ export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 log() { printf '[atrust] %s\n' "$*"; }
 die() { printf '[atrust] ERROR: %s\n' "$*" >&2; exit 1; }
 
+# The image links /root to the sole bind mount: /opt/atrust/data/root.
+# Sangfor looks up root's home directory via passwd, so HOME alone is insufficient.
+[[ -L /root && "$(readlink /root)" == "/opt/atrust/data/root" ]] ||
+    die 'Image /root persistence symlink missing; rebuild the runtime image'
+[[ -f /opt/atrust/scripts/install-atrust.sh ]] ||
+    die 'Missing runtime/scripts/install-atrust.sh in the single mounted directory'
+mkdir -p /opt/atrust/data/root
+chmod 700 /opt/atrust/data/root
+if [[ -d /root.image ]]; then
+    cp -an /root.image/. /opt/atrust/data/root/
+fi
+export HOME=/root
+cd /root
+
 # Installation is part of starting a new container, never Docker image build.
 bash /opt/atrust/scripts/install-atrust.sh "${ATRUST_DEB:-/opt/atrust/aTrustInstaller_amd64.deb}"
 

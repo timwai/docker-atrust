@@ -14,8 +14,8 @@ usage() {
 Usage:
   ./build.sh [--chromium]                           # image only; no aTrust DEB required
   ./build.sh --deb /path/to/aTrustInstaller_amd64.deb [--chromium]
-  ./build.sh --official [--chromium]                # fetch official public DEB to vendor/
-  ./build.sh --local [--chromium]                   # validate vendor/ DEB then build
+  ./build.sh --official [--chromium]                # fetch official public DEB to runtime/
+  ./build.sh --local [--chromium]                   # validate runtime/ DEB then build
 
 The DEB remains on the HOST and is mounted at container creation.
 Image build never includes or installs the proprietary package, and never clones GitHub.
@@ -40,8 +40,8 @@ done
 command -v docker >/dev/null || { echo "Docker CLI not installed" >&2; exit 1; }
 docker info >/dev/null 2>&1 || { echo "Docker daemon not available" >&2; exit 1; }
 [[ "$(uname -m)" == x86_64 ]] || { echo "Only linux/amd64 supported" >&2; exit 1; }
-mkdir -p vendor
-DEST="$ROOT/vendor/aTrustInstaller_amd64.deb"
+mkdir -p runtime
+DEST="$ROOT/runtime/aTrustInstaller_amd64.deb"
 if [[ "$DEB_SOURCE" == deb ]]; then
   [[ -f "$DEB_VALUE" ]] || { echo "Package not found: $DEB_VALUE" >&2; exit 1; }
   source="$(realpath "$DEB_VALUE")"

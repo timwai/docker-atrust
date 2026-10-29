@@ -1,8 +1,9 @@
 .git
 .github
 .env
-data
+runtime
 vendor
+data
 *.tar
 *.tar.gz
 *.log

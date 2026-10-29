@@ -1,9 +1,17 @@
-# Vendor proprietary software must never be committed.
-vendor/*.deb
-vendor/*.rpm
-vendor/*.zip
+# The single runtime directory contains a proprietary client and private state.
+/runtime/data/
+/runtime/*.deb
+/runtime/*.rpm
+/runtime/*.zip
+/runtime/*.tar
+/runtime/*.tar.gz
+/runtime/.env
+# Legacy 3-bind layout and migration backups
+/vendor/
+/data/
+/data.backup/
+/*.backup/
 .env
-data/
 *.tar
 *.tar.gz
 *.log

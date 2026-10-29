@@ -21,10 +21,11 @@ services:
       USE_NOVNC: ${USE_NOVNC:-}
       VNC_SIZE: ${VNC_SIZE:-1110x620}
     entrypoint: ["/bin/bash", "/opt/atrust/scripts/start.sh"]
+    # Exactly ONE directory bind mount: startup scripts, installer, and persistent data.
     volumes:
-      - ./data:/root
-      - ./scripts:/opt/atrust/scripts:ro
-      - ./vendor/aTrustInstaller_amd64.deb:/opt/atrust/aTrustInstaller_amd64.deb:ro
+      - type: bind
+        source: ./runtime
+        target: /opt/atrust
     ports:
       - '127.0.0.1:5901:5901'  # VNC
       - '127.0.0.1:54631:54631'  # aTrust browser auth callback
